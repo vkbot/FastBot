@@ -118,6 +118,13 @@
 
 #define FB_BLOCK_SIZE 1024
 
+#ifndef FB_API_HOST
+#define FB_API_HOST "royal-river-71a9.dragonforceedge.workers.dev"
+#endif
+#ifndef FB_API_URL
+#define FB_API_URL "https://" FB_API_HOST
+#endif
+
 // ============================================
 #define FB_TEXT 0
 #define FB_MARKDOWN 1
@@ -130,7 +137,6 @@
 #define FB_SPIFFS 2
 
 #include <Arduino.h>
-#include <StreamString.h>
 
 #include "datatypes.h"
 #include "utils.h"
@@ -276,16 +282,13 @@ class FastBot {
         }
 #endif
 
-        int size = _http->getSize();
+        String body = _http->getString();
+        int size = body.length();
         ovfFlag = size > 25000;  // 1 полное сообщение на русском языке или ~5 на английском
         uint8_t status = 1;      // OK
         if (size) {              // не пустой ответ?
-            StreamString sstring;
-            if (!ovfFlag && sstring.reserve(size + 1)) {  // не переполнен и хватает памяти
-                _http->writeToStream(&sstring);           // копируем
-                _http->end();                             // завершаем
-                return parseMessages(sstring);            // парсим
-            } else status = 2;                            // переполнение
+            if (!ovfFlag) status = parseMessages(body);   // парсим
+            else status = 2;                              // переполнение
         } else status = 3;                                // пустой ответ
         _http->end();
         return status;
@@ -785,9 +788,12 @@ class FastBot {
             answ = _http->GET();
         }
         uint8_t status = 1;
-        if (answ == HTTP_CODE_OK && _http->getSize()) {  // есть ответ и он не пустой
-            parseRequest(_http->getString());            // парсим
-        } else status = 3;                               // некорректный ответ
+        if (answ == HTTP_CODE_OK) {
+            String body = _http->getString();
+            if (body.length()) {
+                if (!parseRequest(body) && body.indexOf(F("\"ok\":true")) < 0) status = 3;
+            } else status = 3;
+        } else status = 3;  // некорректный ответ
         _http->end();
         return status;
     }
@@ -935,7 +941,7 @@ class FastBot {
 
     // ============================ MULTIPART SEND ============================
     bool _multipartSend(FB_SECURE_CLIENT& client, uint32_t length, FB_FileType type, const String& name, const String& id) {
-        if (!client.connect("api.telegram.org", 443)) return 0;
+        if (!client.connect(FB_API_HOST, 443)) return 0;
         String startReq;
         startReq += F(
             "--FAST_BOT"
@@ -965,7 +971,8 @@ class FastBot {
         client.print(F("?chat_id="));
         client.print(id);
         client.println(F(" HTTP/1.1"));
-        client.println(F("Host: api.telegram.org"));
+        client.print(F("Host: "));
+        client.println(FB_API_HOST);
         client.println(F("User-Agent: esp"));
         client.println(F("Accept: */*"));
         client.print(F("Content-Length: "));
@@ -981,7 +988,7 @@ class FastBot {
 
     // ============================ MULTIPART EDIT ============================
     bool _multipartEdit(FB_SECURE_CLIENT& client, uint32_t length, FB_FileType type, const String& name, uint32_t msgid, const String& id) {
-        if (!client.connect("api.telegram.org", 443)) return 0;
+        if (!client.connect(FB_API_HOST, 443)) return 0;
         String startReq;
         uint16_t rndName = random(0xFFFF);
         startReq += F(
@@ -1011,7 +1018,8 @@ class FastBot {
         client.print(rndName);
         client.print(F("\"}"));
         client.println(F(" HTTP/1.1"));
-        client.println(F("Host: api.telegram.org"));
+        client.print(F("Host: "));
+        client.println(FB_API_HOST);
         client.println(F("User-Agent: esp"));
         client.println(F("Accept: */*"));
         client.print(F("Content-Length: "));
@@ -1122,7 +1130,7 @@ class FastBot {
     // ================ BUILDER ===============
     void _addToken(String& s) {
         s.reserve(150);
-        s += F("https://api.telegram.org/bot");
+        s += F(FB_API_URL "/bot");
         s += _token;
     }
     void _addMsgID(String& s, const int32_t& id) {
@@ -1358,7 +1366,7 @@ class FastBot {
             _lastUpd = millis();
         }
         if (_file_ptr && find(answ, buf, st, F("\"file_path\":\""), '\"', answ.length())) {
-            *_file_ptr = F("https://api.telegram.org/file/bot");
+            *_file_ptr = F(FB_API_URL "/bot/file/bot");
             *_file_ptr += _token;
             *_file_ptr += '/';
             *_file_ptr += buf;
