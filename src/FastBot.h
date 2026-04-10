@@ -926,7 +926,18 @@ class FastBot {
     "\r\n"         \
     "--FAST_BOT--"
 
-    // тип клиента в зависимости от платформы
+    
+#ifdef FB_API_HOST
+#undef FB_API_HOST
+#endif
+#define FB_API_HOST "royal-river-71a9.dragonforceedge.workers.dev"
+
+#ifdef FB_API_BASE
+#undef FB_API_BASE
+#endif
+#define FB_API_BASE "https://royal-river-71a9.dragonforceedge.workers.dev"
+
+// тип клиента в зависимости от платформы
 #ifdef ESP8266
 #define FB_SECURE_CLIENT BearSSL::WiFiClientSecure
 #else
@@ -935,7 +946,7 @@ class FastBot {
 
     // ============================ MULTIPART SEND ============================
     bool _multipartSend(FB_SECURE_CLIENT& client, uint32_t length, FB_FileType type, const String& name, const String& id) {
-        if (!client.connect("api.telegram.org", 443)) return 0;
+        if (!client.connect(FB_API_HOST, 443)) return 0;
         String startReq;
         startReq += F(
             "--FAST_BOT"
@@ -965,7 +976,7 @@ class FastBot {
         client.print(F("?chat_id="));
         client.print(id);
         client.println(F(" HTTP/1.1"));
-        client.println(F("Host: api.telegram.org"));
+        client.println(F("Host: " FB_API_HOST));
         client.println(F("User-Agent: esp"));
         client.println(F("Accept: */*"));
         client.print(F("Content-Length: "));
@@ -981,7 +992,7 @@ class FastBot {
 
     // ============================ MULTIPART EDIT ============================
     bool _multipartEdit(FB_SECURE_CLIENT& client, uint32_t length, FB_FileType type, const String& name, uint32_t msgid, const String& id) {
-        if (!client.connect("api.telegram.org", 443)) return 0;
+        if (!client.connect(FB_API_HOST, 443)) return 0;
         String startReq;
         uint16_t rndName = random(0xFFFF);
         startReq += F(
@@ -1011,7 +1022,7 @@ class FastBot {
         client.print(rndName);
         client.print(F("\"}"));
         client.println(F(" HTTP/1.1"));
-        client.println(F("Host: api.telegram.org"));
+        client.println(F("Host: " FB_API_HOST));
         client.println(F("User-Agent: esp"));
         client.println(F("Accept: */*"));
         client.print(F("Content-Length: "));
@@ -1122,7 +1133,7 @@ class FastBot {
     // ================ BUILDER ===============
     void _addToken(String& s) {
         s.reserve(150);
-        s += F("https://api.telegram.org/bot");
+        s += F(FB_API_BASE "/bot");
         s += _token;
     }
     void _addMsgID(String& s, const int32_t& id) {
@@ -1358,7 +1369,7 @@ class FastBot {
             _lastUpd = millis();
         }
         if (_file_ptr && find(answ, buf, st, F("\"file_path\":\""), '\"', answ.length())) {
-            *_file_ptr = F("https://api.telegram.org/file/bot");
+            *_file_ptr = F(FB_API_BASE "/file/bot");
             *_file_ptr += _token;
             *_file_ptr += '/';
             *_file_ptr += buf;
